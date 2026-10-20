@@ -4,12 +4,10 @@
 #include <time.h>
 #include <locale.h>
 
-
 typedef struct Node {
     int vertex;
     struct Node* next;
 } Node;
-
 
 void freeAdjList(Node** adjList, int n) {
     if (!adjList) return;
@@ -24,14 +22,12 @@ void freeAdjList(Node** adjList, int n) {
     free(adjList);
 }
 
-
 void addEdgeToList(Node** adjList, int u, int v) {
     Node* newNode = (Node*)malloc(sizeof(Node));
     newNode->vertex = v;
     newNode->next = adjList[u];
     adjList[u] = newNode;
 }
-
 
 Node** matrixToAdjList(int** matrix, int n) {
     Node** adjList = (Node**)malloc(n * sizeof(Node*));
@@ -47,7 +43,6 @@ Node** matrixToAdjList(int** matrix, int n) {
     }
     return adjList;
 }
-
 
 void printAdjList(Node** adjList, int n) {
     printf("\n=== Списки смежности ===\n");
@@ -65,7 +60,6 @@ void printAdjList(Node** adjList, int n) {
     }
 }
 
-
 int** createMatrix(int n) {
     int** matrix = (int**)malloc(n * sizeof(int*));
     for (int i = 0; i < n; i++) {
@@ -74,7 +68,6 @@ int** createMatrix(int n) {
     return matrix;
 }
 
-
 void freeMatrix(int** matrix, int n) {
     if (!matrix) return;
     for (int i = 0; i < n; i++) {
@@ -82,7 +75,6 @@ void freeMatrix(int** matrix, int n) {
     }
     free(matrix);
 }
-
 
 void generateGraph(int** matrix, int n) {
     for (int i = 0; i < n; i++) {
@@ -94,7 +86,6 @@ void generateGraph(int** matrix, int n) {
         }
     }
 }
-
 
 void printMatrix(int** matrix, int n, const char* title) {
     printf("\n--- %s (размер: %d x %d) ---\n", title, n, n);
@@ -117,6 +108,33 @@ void printMatrix(int** matrix, int n, const char* title) {
     }
 }
 
+void printCartesianMatrix(int** matrix, int n1, int n2) {
+    int total = n1 * n2;
+    printf("\n--- Декартово произведение G1 x G2 (%d x %d = %d вершин) ---\n\n", n1, n2, total);
+
+    printf("        ");
+    for (int j = 0; j < total; j++) {
+        int u = j / n2 + 1;
+        int v = j % n2 + 1;
+        printf("(%d,%d) ", u, v);
+    }
+    printf("\n        ");
+    for (int j = 0; j < total; j++) {
+        printf("------");
+    }
+    printf("\n");
+
+    for (int i = 0; i < total; i++) {
+        int u = i / n2 + 1;
+        int v = i % n2 + 1;
+        printf("(%d,%d) |", u, v);
+
+        for (int j = 0; j < total; j++) {
+            printf("%4d  ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+}
 
 int getEdge(int** m, int n, int i, int j) {
     if (i < n && j < n) {
@@ -125,17 +143,17 @@ int getEdge(int** m, int n, int i, int j) {
     return 0;
 }
 
-
-int** identification(int** matrix, int n, int u, int v, int* out_n) {
+int** identification(int** matrix, int n, int u, int v, int* out_n, int keep_loop) {
     int new_n = n - 1;
     *out_n = new_n;
     int** res = createMatrix(new_n);
 
+    int had_edge = matrix[u][v] || matrix[v][u];
 
+    // Гарантируем u < v
     if (u > v) {
         int tmp = u; u = v; v = tmp;
     }
-
 
     for (int i = 0, ni = 0; i < n; i++) {
         if (i == v) continue;
@@ -143,11 +161,13 @@ int** identification(int** matrix, int n, int u, int v, int* out_n) {
             if (j == v) continue;
 
             if (i == u || j == u) {
-                int val_from_u = matrix[i][j];
-                int val_from_v = (i == u) ? matrix[v][j] : matrix[i][v];
-                res[ni][nj] = val_from_u || val_from_v;
+                int val_u = matrix[i][j];
+                int val_v = (i == u) ? matrix[v][j] : matrix[i][v];
+                res[ni][nj] = val_u || val_v;
             }
             else {
+
+
                 res[ni][nj] = matrix[i][j];
             }
             nj++;
@@ -155,7 +175,13 @@ int** identification(int** matrix, int n, int u, int v, int* out_n) {
         ni++;
     }
 
-    res[u][u] = 0;
+    if (keep_loop && had_edge) {
+        res[u][u] = 1;
+    }
+    else {
+        res[u][u] = 0;
+    }
+
     return res;
 }
 
@@ -165,15 +191,13 @@ int** contractEdge(int** matrix, int n, int u, int v, int* out_n) {
         *out_n = n;
         return NULL;
     }
-    return identification(matrix, n, u, v, out_n);
+    return identification(matrix, n, u, v, out_n, 0);
 }
-
 
 int** splitVertex(int** matrix, int n, int u, int* out_n) {
     int new_n = n + 1;
     *out_n = new_n;
     int** res = createMatrix(new_n);
-
 
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -185,18 +209,16 @@ int** splitVertex(int** matrix, int n, int u, int* out_n) {
         res[n][j] = 0;
     }
 
-
     res[u][n] = 1;
     res[n][u] = 1;
-
 
     int count = 0;
     for (int i = 0; i < n; i++) {
         if (i != u && matrix[u][i] == 1) {
             count++;
-            if (count % 2 == 0) {
-                res[u][i] = 0;
-                res[i][u] = 0;
+            if (count % 2 >= 0) {
+                res[u][i] = 1;
+                res[i][u] = 1;
                 res[n][i] = 1;
                 res[i][n] = 1;
             }
@@ -205,7 +227,6 @@ int** splitVertex(int** matrix, int n, int u, int* out_n) {
 
     return res;
 }
-
 
 int** graphUnion(int** m1, int n1, int** m2, int n2, int* out_n) {
     int n = (n1 > n2) ? n1 : n2;
@@ -220,7 +241,6 @@ int** graphUnion(int** m1, int n1, int** m2, int n2, int* out_n) {
     return res;
 }
 
-
 int** graphIntersection(int** m1, int n1, int** m2, int n2, int* out_n) {
     int n = (n1 < n2) ? n1 : n2;
     *out_n = n;
@@ -234,7 +254,6 @@ int** graphIntersection(int** m1, int n1, int** m2, int n2, int* out_n) {
     return res;
 }
 
-
 int** graphRingSum(int** m1, int n1, int** m2, int n2, int* out_n) {
     int n = (n1 > n2) ? n1 : n2;
     *out_n = n;
@@ -247,7 +266,6 @@ int** graphRingSum(int** m1, int n1, int** m2, int n2, int* out_n) {
     }
     return res;
 }
-
 
 int** cartesianProduct(int** m1, int n1, int** m2, int n2, int* out_n) {
     int total_n = n1 * n2;
@@ -278,7 +296,6 @@ int** cartesianProduct(int** m1, int n1, int** m2, int n2, int* out_n) {
     }
     return res;
 }
-
 
 int main() {
     setlocale(LC_ALL, "Russian");
@@ -311,7 +328,7 @@ int main() {
         printf("1. Показать матрицы графов G1 и G2\n");
         printf("2. Показать списки смежности для G1 и G2 (Задание 1*)\n");
         printf("3. Отождествление вершин в G1 (Задание 2а)\n");
-        printf("4. Стягивание ребра в G1 (Задание 2б)\n");
+        printf("4. Стягивание ребра в G1(Задание 2б)\n");
         printf("5. Расщепление вершины в G1 (Задание 2в)\n");
         printf("6. Объединение G1 и G2 (Задание 3а)\n");
         printf("7. Пересечение G1 и G2 (Задание 3б)\n");
@@ -360,7 +377,7 @@ int main() {
                 break;
             }
             int res_n;
-            int** res = identification(G1, n1, u - 1, v - 1, &res_n);
+            int** res = identification(G1, n1, u - 1, v - 1, &res_n, 1);
             printMatrix(res, res_n, "Результат отождествления");
 
             Node** list = matrixToAdjList(res, res_n);
@@ -436,6 +453,8 @@ int main() {
             int res_n;
             int** res = graphRingSum(G1, n1, G2, n2, &res_n);
             printMatrix(res, res_n, "Результат кольцевой суммы G1 ⊕ G2");
+
+
             freeMatrix(res, res_n);
             break;
         }
@@ -443,7 +462,7 @@ int main() {
         case 9: {
             int res_n;
             int** res = cartesianProduct(G1, n1, G2, n2, &res_n);
-            printMatrix(res, res_n, "Результат декартова произведения G1 x G2");
+            printCartesianMatrix(res, n1, n2);
             freeMatrix(res, res_n);
             break;
         }
@@ -468,7 +487,6 @@ int main() {
             printf("Неверный пункт меню!\n");
         }
     }
-
 
     freeMatrix(G1, n1);
     freeMatrix(G2, n2);
